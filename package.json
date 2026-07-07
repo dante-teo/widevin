@@ -1,6 +1,6 @@
 {
   "name": "widevin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight TypeScript Devin provider library.",
   "type": "module",
   "packageManager": "pnpm@11.10.0",
