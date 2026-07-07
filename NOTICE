@@ -1,0 +1,15 @@
+widevin vendors Devin/Cascade protocol `.proto` files from:
+
+https://github.com/can1357/oh-my-pi
+
+Vendored source path in upstream snapshot:
+
+packages/ai/src/providers/devin/proto
+
+The provider behavior, OAuth exchange, and model discovery implementation were informed by these upstream files:
+
+packages/ai/src/providers/devin.ts
+packages/ai/src/registry/oauth/devin.ts
+packages/catalog/src/discovery/devin.ts
+
+The vendored protocol files are included for interoperability and maintenance reference.
