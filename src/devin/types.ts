@@ -52,6 +52,12 @@ export interface DevinTool {
 export interface DevinChatRequest {
   model: string;
   messages: readonly DevinMessage[];
+  /**
+   * Joined with `"\n\n"` into the request's `prompt` field. Optional in
+   * general, but **mandatory when `model` is a Claude series model and
+   * `tools` is non-empty** — Claude's tool-use path requires a non-empty
+   * system prompt; omitting it yields degraded or rejected tool calls.
+   */
   systemPrompt?: readonly string[];
   tools?: readonly DevinTool[];
   conversationId?: string;

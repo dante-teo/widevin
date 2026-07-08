@@ -147,6 +147,18 @@ hits a real Devin/Cascade endpoint. The OAuth loopback HTTP server
 wiring are exercised only indirectly (through the exported pieces they
 compose) rather than with dedicated integration tests.
 
+## Protocol Quirks
+
+- **Claude models require a non-empty system prompt for tool use.** When
+  `model` targets a Claude series model and `tools` is passed,
+  `systemPrompt` is effectively mandatory — Claude's tool-use path rejects
+  or degrades tool calls without one. `buildChatRequest` (`chat.ts`) does
+  not currently enforce this at the type or runtime level (`systemPrompt`
+  stays optional in `DevinChatRequest` since it's only required for a
+  subset of models/requests); callers targeting Claude models with tools
+  must supply `systemPrompt` themselves. See README's Tool Calls section
+  and the `DevinChatRequest.systemPrompt` JSDoc in `types.ts`.
+
 ## Dependency Policy
 
 Prefer well-maintained open source packages for established problems such

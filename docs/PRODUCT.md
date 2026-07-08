@@ -92,6 +92,10 @@ Every public feature has:
 - Intentional error behavior: `DevinAuthError` (OAuth), `DevinApiError`
   (HTTP failures, carries `status`/`body`), `DevinProtocolError` (wire
   format failures) are distinct, documented types.
+- Documented protocol quirks that affect callers: `systemPrompt` is
+  mandatory (not merely recommended) when `model` is a Claude series model
+  and `tools` is passed, since Claude's tool-use path requires a non-empty
+  system prompt (see README Tool Calls section).
 
 ## Release Readiness
 

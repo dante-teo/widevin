@@ -67,6 +67,13 @@ for await (const event of events) {
 }
 ```
 
+> **Claude models require a system prompt for tool use.** When `model`
+> targets a Claude series model (e.g. `claude-sonnet-4`, `claude-opus-4`)
+> and `tools` is non-empty, `systemPrompt` is mandatory — Claude's tool-use
+> path requires a non-empty system prompt, and omitting it produces
+> degraded or rejected tool-call behavior upstream. Non-Claude models are
+> unaffected; `systemPrompt` remains optional for plain text chat.
+
 ## Tool Calls
 
 ```ts
