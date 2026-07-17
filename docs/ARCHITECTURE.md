@@ -43,7 +43,7 @@ non-goals.
 │       ├── connect.ts        # Connect-RPC frame encode/decode (gzip)
 │       ├── constants.ts      # URLs, paths, versions, stop patterns
 │       ├── errors.ts         # DevinAuthError / DevinApiError / DevinProtocolError
-│       ├── json.ts           # lenient JSON parsing for streaming tool-call args
+│       ├── json.ts           # JSON parsing + throttling for streaming tool-call args
 │       ├── models.ts         # model discovery + normalization
 │       ├── proto.ts          # thin wrapper over generated protobuf schemas
 │       ├── proto/            # vendored .proto sources + generated TS (see NOTICE)
@@ -98,6 +98,11 @@ Public APIs are:
 single value, since chat responses are inherently streamed (text/thinking
 deltas, tool-call deltas, usage, and a final `done` event).
 
+Tool-call argument accumulation is request-local. Each tool-call ID has one
+immutable state value containing its name, accumulated JSON, and last parse
+attempt length. A pure transition function computes the next state and raw
+delta; the async generator owns the `Map` and network/event side effects.
+
 ## Build Outputs
 
 The package publishes compiled JavaScript and TypeScript declarations via
@@ -138,8 +143,11 @@ protocol-level logic directly:
 - `models.test.ts` — model normalization (dedup, disabled/blank filtering,
   reasoning detection) and non-200 error handling.
 - `chat.test.ts` — end-to-end streamed chat request/response shape
-  (compressed request, delta/tool-call/usage/done events) and prompt
-  building for user/assistant/tool messages.
+  (compressed request, cumulative and incremental tool arguments,
+  per-tool-call parse throttling, usage/done events) and prompt building for
+  user/assistant/tool messages.
+- `json.test.ts` — strict JSON fallback semantics and the streaming parse
+  throttle's first-attempt and 256-character growth guarantees.
 
 Network access is stubbed via an injected `fetch` (`FetchLike`); no test
 hits a real Devin/Cascade endpoint. The OAuth loopback HTTP server
@@ -158,6 +166,12 @@ compose) rather than with dedicated integration tests.
   subset of models/requests); callers targeting Claude models with tools
   must supply `systemPrompt` themselves. See README's Tool Calls section
   and the `DevinChatRequest.systemPrompt` JSDoc in `types.ts`.
+- **Mid-stream tool-argument parsing is throttled per tool-call ID.** The
+  first non-empty buffer is attempted immediately; another attempt requires
+  at least 256 characters of growth. Every raw `toolcall_delta` is still
+  emitted, but its optional `arguments` snapshot can lag the buffer. The
+  unconditional `toolcall_end` parse is authoritative. This bounds repeated
+  full-buffer parsing to linear rather than quadratic total work.
 
 ## Dependency Policy
 

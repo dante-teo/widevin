@@ -73,8 +73,21 @@ export type DevinStreamEvent =
   | { type: "text_delta"; delta: string }
   | { type: "thinking_delta"; delta: string; signature?: string }
   | { type: "toolcall_start"; id: string; name: string }
-  | { type: "toolcall_delta"; id: string; delta: string; arguments?: unknown }
-  | { type: "toolcall_end"; id: string; name: string; arguments: unknown }
+  | {
+      type: "toolcall_delta";
+      id: string;
+      /** Raw newly received suffix; emitted for every tool-argument update. */
+      delta: string;
+      /** Opportunistic parsed snapshot. It can lag `delta` because parsing is throttled. */
+      arguments?: unknown;
+    }
+  | {
+      type: "toolcall_end";
+      id: string;
+      name: string;
+      /** Authoritative parse of the complete accumulated argument buffer. */
+      arguments: unknown;
+    }
   | { type: "usage"; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
   | { type: "done"; reason: "stop" | "length" | "toolUse" };
 

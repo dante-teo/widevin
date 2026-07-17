@@ -19,9 +19,10 @@ service (see [README.md](../README.md)).
 - Provide a small, reliable public API with predictable behavior:
   `createDevinProvider`, plus lower-level `loginDevin`, `listDevinModels`,
   `streamDevinChat` for callers who want to compose the flow themselves.
-- Favor pure functions and immutable data over hidden state — the only
-  mutable state in the package is behind the two `TokenStore`
-  implementations, and it never escapes their closures.
+- Favor pure functions and immutable data over hidden state. Long-lived
+  mutable state exists only behind the two `TokenStore` implementations;
+  request-local protocol state is scoped to one async operation and never
+  escapes it.
 - Ship first-class TypeScript types (`DevinModel`, `DevinMessage`,
   `DevinStreamEvent`, `DevinChatRequest`, etc.), generated under `strict`
   mode with `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`.
@@ -95,7 +96,9 @@ Every public feature has:
 - Documented protocol quirks that affect callers: `systemPrompt` is
   mandatory (not merely recommended) when `model` is a Claude series model
   and `tools` is passed, since Claude's tool-use path requires a non-empty
-  system prompt (see README Tool Calls section).
+  system prompt; streamed `toolcall_delta.arguments` is an optional,
+  throttled snapshot while `toolcall_end.arguments` is authoritative (see
+  README Tool Calls section).
 
 ## Release Readiness
 
@@ -111,7 +114,7 @@ Before publishing to npm:
       engine floor.
 - [ ] Add a `license` field to `package.json` and a `LICENSE` file.
 - [ ] Decide semantic versioning / release process before the first
-      publish (currently `0.1.0`, unpublished).
+      publish (currently `0.1.4`, unpublished).
 
 ## Open Questions
 

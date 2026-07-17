@@ -98,6 +98,12 @@ for await (const event of devin.streamChat({
 }
 ```
 
+Every `toolcall_delta` contains the raw `delta` suffix. Its optional
+`arguments` field is an opportunistic parsed snapshot and is throttled during
+streaming, so it may be absent even when the latest accumulated buffer is
+valid JSON. Use `toolcall_end.arguments` as the authoritative parse of the
+full accumulated buffer.
+
 Pass tool results back as history:
 
 ```ts

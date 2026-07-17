@@ -2,7 +2,7 @@ import { DEVIN_AUTH_PATH, DEVIN_CHAT_PATH, DEVIN_DEFAULT_BASE_URL, DEVIN_DEFAULT
 import type { MessageShape } from "@bufbuild/protobuf";
 import { decodeConnectFrames, encodeConnectFrame, readConnectTrailerError, responseBodyToAsyncIterable } from "./connect.js";
 import { DevinApiError, DevinProtocolError } from "./errors.js";
-import { parsePossiblyCompleteJson, parseStreamingJson } from "./json.js";
+import { parsePossiblyCompleteJsonThrottled, parseStreamingJson } from "./json.js";
 import { metadata } from "./models.js";
 import {
   CacheControlType,
@@ -22,6 +22,26 @@ import { deterministicUuid } from "./uuid.js";
 
 type ImageDataMessage = MessageShape<typeof schemas.imageData>;
 type ChatToolCallMessage = MessageShape<typeof schemas.chatToolCall>;
+type StreamingToolCallState = Readonly<{
+  name: string;
+  argumentsJson: string;
+  lastParseAttemptLength: number;
+}>;
+
+const advanceStreamingToolCall = (previous: StreamingToolCallState | undefined, call: ChatToolCallMessage) => {
+  const previousJson = previous?.argumentsJson ?? "";
+  const argumentsJson = call.argumentsJson.startsWith(previousJson) ? call.argumentsJson : previousJson + call.argumentsJson;
+  const parsed = parsePossiblyCompleteJsonThrottled(argumentsJson, previous?.lastParseAttemptLength ?? 0);
+  return {
+    state: {
+      name: call.name || previous?.name || "",
+      argumentsJson,
+      lastParseAttemptLength: parsed?.attemptedLength ?? previous?.lastParseAttemptLength ?? 0
+    },
+    delta: argumentsJson.slice(previousJson.length),
+    parsedArguments: parsed?.value
+  } as const;
+};
 
 export interface StreamDevinChatOptions extends DevinChatRequest {
   token?: string;
@@ -55,8 +75,7 @@ export async function* streamDevinChat(options: StreamDevinChatOptions): AsyncIt
   }
   if (!response.body) throw new DevinProtocolError("Devin chat response body is empty");
 
-  const toolNames = new Map<string, string>();
-  const toolJson = new Map<string, string>();
+  const toolCalls = new Map<string, StreamingToolCallState>();
   let activeToolCallId: string | undefined;
   let sawToolCall = false;
   let latestStopReason = StopReason.UNSPECIFIED;
@@ -77,20 +96,17 @@ export async function* streamDevinChat(options: StreamDevinChatOptions): AsyncIt
     for (const call of message.deltaToolCalls) {
       const id = call.id || activeToolCallId;
       if (!id) continue;
-      const previous = toolJson.get(id) ?? "";
-      const accumulated = call.argumentsJson.startsWith(previous) ? call.argumentsJson : previous + call.argumentsJson;
-      const delta = accumulated.slice(previous.length);
-      const isNew = !toolJson.has(id);
-      toolJson.set(id, accumulated);
-      if (call.name) toolNames.set(id, call.name);
+      const previous = toolCalls.get(id);
+      const { state, delta, parsedArguments } = advanceStreamingToolCall(previous, call);
+      toolCalls.set(id, state);
       activeToolCallId = id;
       sawToolCall = true;
-      if (isNew) yield { type: "toolcall_start", id, name: toolNames.get(id) ?? "" };
+      if (!previous) yield { type: "toolcall_start", id, name: state.name };
       yield {
         type: "toolcall_delta",
         id,
         delta,
-        ...(parsePossiblyCompleteJson(accumulated) !== undefined ? { arguments: parsePossiblyCompleteJson(accumulated) } : {})
+        ...(parsedArguments !== undefined ? { arguments: parsedArguments } : {})
       };
     }
     if (message.stopReason !== StopReason.UNSPECIFIED) latestStopReason = message.stopReason;
@@ -104,8 +120,8 @@ export async function* streamDevinChat(options: StreamDevinChatOptions): AsyncIt
       };
     }
   }
-  for (const [id, value] of toolJson) {
-    yield { type: "toolcall_end", id, name: toolNames.get(id) ?? "", arguments: parseStreamingJson(value) };
+  for (const [id, { name, argumentsJson }] of toolCalls) {
+    yield { type: "toolcall_end", id, name, arguments: parseStreamingJson(argumentsJson) };
   }
   yield { type: "done", reason: sawToolCall ? "toolUse" : latestStopReason === StopReason.MAX_TOKENS ? "length" : "stop" };
 }

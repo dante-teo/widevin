@@ -6,6 +6,16 @@ import { decodeProto, encodeProto, schemas } from "../src/devin/proto.js";
 import { DevinApiError } from "../src/index.js";
 import { collect, protoResponse, streamResponse } from "./helpers.js";
 
+const collectChatEvents = async (chatFrames: readonly Uint8Array[]) => {
+  const authPayload = encodeProto(schemas.getUserJwtResponse, create(schemas.getUserJwtResponse, { userJwt: "jwt-1" }));
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(protoResponse(authPayload))
+    .mockResolvedValueOnce(streamResponse([...chatFrames, encodeConnectFrame(new TextEncoder().encode("{}"), { endStream: true })]));
+
+  return collect(streamDevinChat({ token: "raw", model: "model-a", messages: [], fetch }));
+};
+
 describe("chat streaming", () => {
   it("fetches JWT first, sends compressed chat request, and emits deltas/tool/usage/done", async () => {
     const authPayload = encodeProto(
@@ -65,11 +75,68 @@ describe("chat streaming", () => {
       { type: "text_delta", delta: "hi" },
       { type: "toolcall_start", id: "call-1", name: "search" },
       { type: "toolcall_delta", id: "call-1", delta: '{"q"' },
-      { type: "toolcall_delta", id: "call-1", delta: ':"x"}', arguments: { q: "x" } },
+      { type: "toolcall_delta", id: "call-1", delta: ':"x"}' },
       { type: "usage", inputTokens: 2, outputTokens: 3, cacheReadTokens: 4, cacheWriteTokens: 5 },
       { type: "toolcall_end", id: "call-1", name: "search", arguments: { q: "x" } },
       { type: "done", reason: "toolUse" }
     ]);
+  });
+
+  it("accumulates genuinely incremental tool argument fragments", async () => {
+    const events = await collectChatEvents([
+      encodeConnectFrame(
+        encodeProto(
+          schemas.getChatMessageResponse,
+          create(schemas.getChatMessageResponse, {
+            deltaToolCalls: [
+              create(schemas.chatToolCall, { id: "call-1", name: "search", argumentsJson: '{"q"' }),
+              create(schemas.chatToolCall, { id: "call-1", argumentsJson: ':"x"}' })
+            ]
+          })
+        ),
+        { compress: true }
+      )
+    ]);
+
+    expect(events.filter((event) => event.type === "toolcall_delta")).toEqual([
+      { type: "toolcall_delta", id: "call-1", delta: '{"q"' },
+      { type: "toolcall_delta", id: "call-1", delta: ':"x"}' }
+    ]);
+    expect(events.find((event) => event.type === "toolcall_end")).toEqual({
+      type: "toolcall_end",
+      id: "call-1",
+      name: "search",
+      arguments: { q: "x" }
+    });
+  });
+
+  it("throttles cumulative tool argument parsing per tool-call ID and fully parses final arguments", async () => {
+    const cumulativeArguments = Array.from({ length: 260 }, (_, index) => `{}${" ".repeat(index)}`);
+    const toolCalls = [
+      create(schemas.chatToolCall, { id: "call-a", name: "first", argumentsJson: cumulativeArguments[0]! }),
+      create(schemas.chatToolCall, { id: "call-b", name: "second", argumentsJson: '{"id":"b"}' }),
+      ...cumulativeArguments.slice(1).map((argumentsJson) => create(schemas.chatToolCall, { id: "call-a", argumentsJson }))
+    ];
+    const events = await collectChatEvents([
+      encodeConnectFrame(
+        encodeProto(schemas.getChatMessageResponse, create(schemas.getChatMessageResponse, { deltaToolCalls: toolCalls })),
+        { compress: true }
+      )
+    ]);
+
+    const firstDeltas = events.filter(
+      (event): event is Extract<(typeof events)[number], { type: "toolcall_delta" }> =>
+        event.type === "toolcall_delta" && event.id === "call-a"
+    );
+    const secondDelta = events.find((event) => event.type === "toolcall_delta" && event.id === "call-b");
+    const firstEnd = events.find((event) => event.type === "toolcall_end" && event.id === "call-a");
+
+    expect(firstDeltas.map((event) => event.delta).join("")).toBe(cumulativeArguments.at(-1));
+    expect(
+      firstDeltas.flatMap((event, index) => ("arguments" in event ? [index] : []))
+    ).toEqual([0, 256]);
+    expect(secondDelta).toEqual({ type: "toolcall_delta", id: "call-b", delta: '{"id":"b"}', arguments: { id: "b" } });
+    expect(firstEnd).toEqual({ type: "toolcall_end", id: "call-a", name: "first", arguments: {} });
   });
 
   it("maps assistant tool calls and tool results into stable prompts", () => {
