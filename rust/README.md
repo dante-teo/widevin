@@ -11,7 +11,7 @@ and applicable terms.
 
 ```toml
 [dependencies]
-widevin = "0.1.4"
+widevin = "0.2.0"
 futures-util = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```

@@ -19,7 +19,7 @@ Rust:
 cargo add widevin
 ```
 
-The TypeScript and Rust packages share version `0.1.4` and expose equivalent
+The TypeScript and Rust packages share version `0.2.0` and expose equivalent
 OAuth, token-store, model-discovery, streaming chat, injection, and structured
 error behavior. Rust users can start with the
 [`rust/README.md`](./rust/README.md).
