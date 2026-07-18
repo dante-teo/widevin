@@ -151,6 +151,12 @@ cargo doc --manifest-path rust/Cargo.toml --no-deps
 cargo package --manifest-path rust/Cargo.toml
 ```
 
+Use `pnpm bump patch` (or `minor`, `major`, a prerelease bump, or an explicit
+version) to update both package manifests, the Cargo lockfile, and
+current-version README references. From a clean working tree, the command also
+creates a version commit and matching annotated `vX.Y.Z` tag. It never pushes
+or publishes.
+
 CI runs the Rust tests on Linux and Windows, and performs the full Rust 1.85
 format, Clippy, test, documentation, and package checks on Linux. See
 [`docs/RELEASING.md`](./docs/RELEASING.md) for shared-version and publishing

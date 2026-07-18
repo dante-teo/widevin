@@ -79,10 +79,11 @@ Delivered:
 - Root and Rust `NOTICE` files documenting vendored protobuf provenance.
 - Linux and Windows CI plus idempotent crates.io-then-npm release automation.
 
-Outstanding before publication:
+Outstanding for subsequent releases:
 
-- Changelog / release notes (no versions have been published yet).
-- One manual crates.io `0.1.4` publication and trusted-publisher setup.
+- Changelog / release notes.
+- Configure crates.io trusted publishing after the manual Rust `0.1.4`
+  publication.
 
 ## Quality Bar
 
@@ -122,8 +123,8 @@ Before publishing either package:
       engine floor.
 - [x] MIT license metadata and license files are present.
 - [x] One shared version/tag policy is enforced by release automation.
-- [ ] Publish Rust `0.1.4` manually, then configure crates.io trusted
-      publishing for subsequent tags.
+- [x] Publish Rust `0.1.4` manually.
+- [ ] Configure crates.io trusted publishing for subsequent tags.
 
 ## Open Questions
 

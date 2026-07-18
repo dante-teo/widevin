@@ -175,6 +175,10 @@ protocol-level logic directly:
   throttle's first-attempt and 256-character growth guarantees.
 - `release-metadata.test.ts` — branch/tag version-check behavior and Rust
   protocol-notice packaging metadata.
+- `version-bump.test.ts` — synchronized npm/Cargo/README bumps, prereleases,
+  explicit versions, invalid input, pre-existing drift, Git cleanliness,
+  LF/CRLF preservation, filesystem-safe script paths, commit/tag rollback,
+  annotated release tags, and no-push behavior.
 
 Network access is stubbed via an injected `fetch` (`FetchLike`); no test
 hits a real Devin/Cascade endpoint. Rust integration tests additionally
@@ -237,10 +241,14 @@ builds additionally require the tag version to match. Publication order is
 crates.io, then npm, and each step skips a version already present in its
 registry.
 
-Rust `0.1.4` must be published manually once before crates.io trusted
-publishing can be configured. After that, bind repository
+Rust `0.1.4` was published manually so crates.io trusted publishing can be
+configured. Bind repository
 `dante-teo/widevin`, workflow `publish.yml`, and environment `release` as the
-trusted publisher. No release workflow is run by this implementation work.
+trusted publisher. Future version changes use `pnpm bump`, which updates both
+manifests, the Cargo lockfile, and current-version README references without
+publishing. It requires a clean working tree, creates a local version commit
+and annotated tag, and never pushes them. No release workflow is run by this
+implementation work.
 See [RELEASING.md](./RELEASING.md) for the operational checklist.
 
 ## Open Questions
