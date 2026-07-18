@@ -1,0 +1,12 @@
+widevin uses a minimal Prost schema derived from Devin/Cascade protocol
+`.proto` files vendored in the repository from:
+
+https://github.com/can1357/oh-my-pi
+
+Upstream snapshot path:
+
+packages/ai/src/providers/devin/proto
+
+The definitions in `rust/src/proto.rs` reproduce only the field numbers and
+wire types needed by this crate. They are included for protocol
+interoperability, and consumers do not need `protoc` or Buf.

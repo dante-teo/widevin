@@ -10,45 +10,83 @@ permissions:
   id-token: write
 
 jobs:
-  publish:
-    name: Publish to npm
+  verify:
+    name: Verify release
     runs-on: ubuntu-latest
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+      - run: corepack enable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          components: clippy,rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - run: pnpm run check:versions
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - run: pnpm run typecheck
+      - run: pnpm test
+      - run: pnpm run build
+      - run: pnpm pack --pack-destination "$RUNNER_TEMP"
+      - run: cargo fmt --manifest-path rust/Cargo.toml --check
+      - run: cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings
+      - run: cargo test --manifest-path rust/Cargo.toml --all-features
+      - run: cargo doc --manifest-path rust/Cargo.toml --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - run: cargo package --manifest-path rust/Cargo.toml
 
-      - name: Enable Corepack
-        run: corepack enable
+  crates:
+    name: Publish crates.io
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - id: existing
+        run: |
+          STATUS="$(curl --silent --output /dev/null --write-out "%{http_code}" \
+            "https://crates.io/api/v1/crates/widevin/${{ needs.verify.outputs.version }}")"
+          if [ "$STATUS" = "200" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+      - id: auth
+        if: steps.existing.outputs.published != 'true'
+        uses: rust-lang/crates-io-auth-action@v1
+      - if: steps.existing.outputs.published != 'true'
+        run: cargo publish --manifest-path rust/Cargo.toml
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+  npm:
+    name: Publish npm
+    needs:
+      - verify
+      - crates
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+      - run: corepack enable
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
           cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify tag matches package version
+      - run: pnpm install --frozen-lockfile
+      - id: existing
         run: |
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-
-          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
-            echo "Tag v$TAG_VERSION does not match package.json version $PACKAGE_VERSION."
-            exit 1
+          if npm view "widevin@${{ needs.verify.outputs.version }}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      - name: Test
-        run: pnpm test
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Publish
+      - if: steps.existing.outputs.published != 'true'
         run: pnpm publish --no-git-checks --provenance

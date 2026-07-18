@@ -2,12 +2,14 @@
 
 ## Overview
 
-Widevin is a small TypeScript library that implements the Devin/Cascade
-programmatic access protocol: OAuth (PKCE) login, model discovery, and
-streaming chat over Connect-RPC/protobuf. Runtime behavior is deliberately
-narrow — no agent loop, CLI/TUI, proxy server, MCP tooling, retries, or
-multi-provider abstraction. See [PRODUCT.md](./PRODUCT.md) for scope and
-non-goals.
+Widevin is a TypeScript library and Rust crate that implement the
+Devin/Cascade programmatic access protocol: OAuth (PKCE) login, model
+discovery, and streaming chat over Connect-RPC/protobuf. Their public names
+follow each language's conventions while their request defaults, wire
+encoding, normalization, event ordering, and error categories stay aligned.
+Runtime behavior is deliberately narrow — no agent loop, CLI/TUI, proxy
+server, MCP tooling, retries, or multi-provider abstraction. See
+[PRODUCT.md](./PRODUCT.md) for scope and non-goals.
 
 ## Design Principles
 
@@ -22,9 +24,11 @@ non-goals.
   server, and file-based token storage are isolated behind injectable
   interfaces (`FetchLike`, `TokenStore`, `openBrowser`).
 - Test behavior through public APIs where practical.
+- Keep TypeScript and Rust protocol fixtures cross-decodable.
 - Use open source libraries when they solve a real problem better than
-  custom code — the only runtime dependency is `@bufbuild/protobuf` for
-  Connect/protobuf encoding.
+  custom code. TypeScript uses `@bufbuild/protobuf`; Rust uses established
+  Tokio/HTTP, wire-format, compression, serialization, crypto, and stream
+  crates listed in `rust/Cargo.toml`.
 
 ## Project Layout
 
@@ -32,9 +36,17 @@ non-goals.
 .
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   └── PRODUCT.md
+│   ├── PRODUCT.md
+│   └── RELEASING.md
 ├── examples/
 │   └── hello-world.ts       # manual smoke test (login, list models, stream chat)
+├── rust/
+│   ├── examples/hello-world.rs
+│   ├── fixtures/protobuf/    # cross-language wire fixtures
+│   ├── src/                  # functional Rust implementation + minimal Prost schema
+│   ├── tests/                # Rust parity and failure-path tests
+│   ├── NOTICE
+│   └── Cargo.toml
 ├── src/
 │   ├── index.ts              # public entry point / export surface
 │   └── devin/
@@ -62,7 +74,7 @@ non-goals.
 
 ## Source Organization
 
-`src/index.ts` is the sole public entry point. It re-exports:
+`src/index.ts` is the sole TypeScript public entry point. It re-exports:
 
 - `createDevinProvider` (the primary facade — login, token management,
   model discovery, chat streaming)
@@ -76,6 +88,12 @@ Everything under `src/devin/` is an implementation module; only what
 `src/index.ts` re-exports is considered public API. Vendored protobuf
 sources and generated code under `src/devin/proto/` are internal
 implementation detail (see [NOTICE](../NOTICE)) and are never re-exported.
+
+`rust/src/lib.rs` is the Rust public entry point. It exports snake-case
+equivalents and immutable structs/enums. Async iterables become
+`Stream<Item = Result<DevinStreamEvent, DevinError>>`; fetch, browser, UUID,
+and token-store boundaries remain closure- or trait-injectable. The committed
+minimal Prost module means crates.io consumers do not need `protoc`.
 
 ## API Style
 
@@ -118,12 +136,18 @@ source maps enabled). `package.json` already defines:
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md", "NOTICE"]
+  "files": ["dist", "README.md", "NOTICE", "LICENSE"]
 }
 ```
 
 ESM-only, matching the `node >=20` engine floor. CommonJS consumption is not
 supported and is not planned (see Non-Goals in PRODUCT.md).
+
+The Rust crate uses edition 2024 with MSRV 1.85 and publishes from `rust/`.
+It uses Tokio, Reqwest/Rustls, Prost, Flate2, Serde JSON, SHA-2, Base64,
+UUID, IndexMap, Async Stream, and Thiserror. Its explicit package include list
+ships the minimal schema, cross-language fixtures, README, MIT license, and
+Rust-specific protocol `NOTICE`.
 
 ## Testing Strategy
 
@@ -133,7 +157,8 @@ Followed test-driven development for implementation work:
 2. Implement the smallest change that passes the test.
 3. Refactor while keeping tests green.
 
-Current coverage (`vitest run`, `test/*.test.ts`) exercises the pure,
+TypeScript coverage (`vitest run`, `test/*.test.ts`) and Rust coverage
+(`cargo test --manifest-path rust/Cargo.toml`) exercise the pure,
 protocol-level logic directly:
 
 - `auth.test.ts` — PKCE challenge derivation, OAuth URL construction, token
@@ -148,12 +173,17 @@ protocol-level logic directly:
   user/assistant/tool messages.
 - `json.test.ts` — strict JSON fallback semantics and the streaming parse
   throttle's first-attempt and 256-character growth guarantees.
+- `release-metadata.test.ts` — branch/tag version-check behavior and Rust
+  protocol-notice packaging metadata.
 
 Network access is stubbed via an injected `fetch` (`FetchLike`); no test
-hits a real Devin/Cascade endpoint. The OAuth loopback HTTP server
-(`waitForOAuthCallback` in `auth.ts`) and the `createDevinProvider` facade
-wiring are exercised only indirectly (through the exported pieces they
-compose) rather than with dedicated integration tests.
+hits a real Devin/Cascade endpoint. Rust integration tests additionally
+exercise OAuth loopback cleanup, file permissions, provider wiring,
+transport/store failures, missing and malformed responses, partial frames,
+empty-token handling, punctuated reasoning labels, and both directions of
+TypeScript/Prost fixture decoding. CI runs Rust tests on Linux and Windows;
+the Linux job pins Rust 1.85 and also enforces formatting, Clippy, docs, and
+crate packaging.
 
 ## Protocol Quirks
 
@@ -172,6 +202,15 @@ compose) rather than with dedicated integration tests.
   emitted, but its optional `arguments` snapshot can lag the buffer. The
   unconditional `toolcall_end` parse is authoritative. This bounds repeated
   full-buffer parsing to linear rather than quadratic total work.
+- **Empty credentials are absent credentials.** Both implementations leave an
+  empty token unprefixed, while non-empty raw tokens receive the
+  `devin-session-token$` prefix at request boundaries.
+- **Model reasoning labels honor `No Thinking` as a bounded phrase.**
+  Punctuation such as `Claude (No Thinking)` still disables reasoning, while
+  embedded text that does not satisfy the word boundaries does not.
+- **The OAuth callback is a bounded loopback HTTP exchange.** Rust accepts
+  request headers split across TCP reads and caps the accumulated header at
+  16 KiB before validation.
 
 ## Dependency Policy
 
@@ -192,22 +231,21 @@ regenerate `src/devin/proto/generated/` from the vendored `.proto` sources.
 
 ## Publishing Architecture
 
-Status before npm publication:
+Both packages use one semantic version and one `vX.Y.Z` tag. Branch and
+pull-request CI verifies that the npm and Cargo manifest versions agree; tag
+builds additionally require the tag version to match. Publication order is
+crates.io, then npm, and each step skips a version already present in its
+registry.
 
-- [x] Reproducible build command (`pnpm run build`).
-- [x] Explicit package exports (ESM, typed).
-- [x] Generated declaration files.
-- [x] Tests and type checks pass locally (`pnpm test`, `pnpm run typecheck`).
-- [ ] License file and `package.json` `license` field (currently unset).
-- [ ] Prepublish/release check wiring build + typecheck + test into one
-      script (currently run separately).
-- [ ] Confirm no accidental source, test fixture, or local configuration
-      files are included — `files` is already scoped to `dist`, `README.md`,
-      `NOTICE`, which is correct as-is.
+Rust `0.1.4` must be published manually once before crates.io trusted
+publishing can be configured. After that, bind repository
+`dante-teo/widevin`, workflow `publish.yml`, and environment `release` as the
+trusted publisher. No release workflow is run by this implementation work.
+See [RELEASING.md](./RELEASING.md) for the operational checklist.
 
 ## Open Questions
 
 - Whether to vendor-refresh `src/devin/proto/generated/` on a schedule, or
   only on demand when the upstream `oh-my-pi` proto sources change.
-- Release automation (versioning, changelog, publish workflow) — not yet
-  decided; no CI/release pipeline exists in this repo.
+- Whether protobuf fixture regeneration should stay manual or become a
+  checked code-generation task.

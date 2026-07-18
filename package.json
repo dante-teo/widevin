@@ -2,6 +2,7 @@
   "name": "widevin",
   "version": "0.1.4",
   "description": "Lightweight TypeScript Devin provider library.",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dante-teo/widevin"
@@ -20,12 +21,16 @@
   "files": [
     "dist",
     "README.md",
-    "NOTICE"
+    "NOTICE",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "check": "pnpm run typecheck && pnpm test && pnpm run build",
+    "check:versions": "node scripts/check-versions.mjs",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "pnpm run check",
     "gen:proto": "buf generate src/devin/proto/source --template src/devin/proto/buf.gen.yaml",
     "example:hello": "tsx examples/hello-world.ts"
   },

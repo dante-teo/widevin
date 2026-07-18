@@ -1,14 +1,28 @@
 # widevin
 
-Lightweight Node 20+ ESM TypeScript library for Devin/Cascade programmatic access.
+Lightweight Node 20+ ESM TypeScript library and Rust 1.85+ crate for
+Devin/Cascade programmatic access.
 
 It provides OAuth login, caller-controlled token storage, model discovery, and streaming chat with tool-call events. It intentionally does not include an agent loop, CLI/TUI, proxy server, MCP tooling, retries, or a multi-provider framework.
 
 ## Install
 
+TypeScript:
+
 ```sh
 pnpm add widevin
 ```
+
+Rust:
+
+```sh
+cargo add widevin
+```
+
+The TypeScript and Rust packages share version `0.1.4` and expose equivalent
+OAuth, token-store, model-discovery, streaming chat, injection, and structured
+error behavior. Rust users can start with the
+[`rust/README.md`](./rust/README.md).
 
 ## Compliance
 
@@ -41,7 +55,8 @@ const devin = createDevinProvider();
 await devin.setToken(process.env.DEVIN_TOKEN ?? "");
 ```
 
-Store raw tokens. The `devin-session-token$` prefix is applied only at request boundaries.
+Store raw tokens. The `devin-session-token$` prefix is applied only at request
+boundaries. An empty token is treated as absent rather than being prefixed.
 
 ## List Models
 
@@ -126,10 +141,20 @@ await devin.streamChat({
 ```sh
 pnpm install
 pnpm run gen:proto
-pnpm test
-pnpm run typecheck
-pnpm run build
+pnpm run check:versions
+pnpm run check
+
+cargo fmt --manifest-path rust/Cargo.toml --check
+cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings
+cargo test --manifest-path rust/Cargo.toml --all-features
+cargo doc --manifest-path rust/Cargo.toml --no-deps
+cargo package --manifest-path rust/Cargo.toml
 ```
+
+CI runs the Rust tests on Linux and Windows, and performs the full Rust 1.85
+format, Clippy, test, documentation, and package checks on Linux. See
+[`docs/RELEASING.md`](./docs/RELEASING.md) for shared-version and publishing
+details.
 
 ## Manual Smoke Test
 
@@ -140,4 +165,17 @@ pnpm run example:hello
 pnpm run example:hello -- "Explain what this library does in one sentence."
 ```
 
+The matching Rust smoke test is
+[`rust/examples/hello-world.rs`](./rust/examples/hello-world.rs):
+
+```sh
+cargo run --manifest-path rust/Cargo.toml --example hello-world
+cargo run --manifest-path rust/Cargo.toml --example hello-world -- \
+  "Explain what this library does in one sentence."
+```
+
 The protobuf source files under `src/devin/proto/source` are vendored from `can1357/oh-my-pi` for protocol compatibility. Generated TypeScript is committed so consumers do not need protoc or Buf at install time.
+Rust uses a committed minimal Prost module containing only the fields used at
+runtime, so Rust consumers also need no protobuf compiler.
+Both published packages include their applicable `NOTICE` file with protocol
+provenance.

@@ -13,3 +13,8 @@ packages/ai/src/registry/oauth/devin.ts
 packages/catalog/src/discovery/devin.ts
 
 The vendored protocol files are included for interoperability and maintenance reference.
+
+The minimal Prost message definitions in `rust/src/proto.rs` reproduce only
+the field numbers and wire types used by this project from those vendored
+protocol files. They are committed source, so Rust consumers do not need
+`protoc` or Buf.

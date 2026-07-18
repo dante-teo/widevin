@@ -2,10 +2,10 @@
 
 ## Purpose
 
-Widevin is a TypeScript library for programmatic access to Devin/Cascade:
-OAuth login, caller-controlled token storage, model discovery, and streaming
-chat with tool-call events. It is distributed through npm and consumed from
-modern TypeScript and JavaScript (Node.js ≥20, ESM) projects.
+Widevin is a TypeScript library and Rust crate for programmatic access to
+Devin/Cascade: OAuth login, caller-controlled token storage, model discovery,
+and streaming chat with tool-call events. It is distributed through npm and
+crates.io for Node.js ≥20 ESM and Rust 1.85+ consumers.
 
 ## Compliance
 
@@ -28,8 +28,11 @@ service (see [README.md](../README.md)).
   mode with `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`.
 - Work cleanly in Node.js projects (ESM only; no CommonJS or browser target
   is currently supported).
-- Keep installation and runtime dependency cost low — one runtime
-  dependency (`@bufbuild/protobuf`).
+- Keep an idiomatic Rust 2024 API at behavioral parity, including injectable
+  transport, browser, UUID, and token-store boundaries.
+- Keep installation and runtime dependency cost intentional. TypeScript has
+  one runtime dependency (`@bufbuild/protobuf`); Rust uses established
+  async, HTTP/Rustls, protobuf, compression, serialization, and crypto crates.
 - Maintain documentation that makes the package easy to adopt without
   reading the source (README usage examples cover login, existing-token
   use, model listing, chat streaming, and tool calls).
@@ -54,8 +57,10 @@ service (see [README.md](../README.md)).
 - TypeScript/JavaScript developers building a Devin/Cascade-compatible
   chat client or agent runtime who want a typed, dependency-light provider
   implementation rather than reimplementing the Connect-RPC protocol.
+- Rust developers who need the same protocol behavior as a Tokio stream
+  without requiring `protoc`.
 - Maintainers who need tests, build scripts, and release metadata suitable
-  for npm publishing.
+  for npm and crates.io publishing.
 
 ## Package Expectations
 
@@ -69,13 +74,15 @@ Delivered:
   `vitest run`).
 - README usage examples (login, existing token, list models, stream chat,
   tool calls, tool-result history).
-- `NOTICE` documenting vendored protobuf sources and prior-art reference.
+- Rust 2024 crate source, examples, fixtures, tests, README, MIT license, and
+  crate-local protocol notice under `rust/`.
+- Root and Rust `NOTICE` files documenting vendored protobuf provenance.
+- Linux and Windows CI plus idempotent crates.io-then-npm release automation.
 
 Outstanding before publication:
 
-- License information (`LICENSE` file + `package.json` `license` field are
-  not yet set).
 - Changelog / release notes (no versions have been published yet).
+- One manual crates.io `0.1.4` publication and trusted-publisher setup.
 
 ## Quality Bar
 
@@ -102,23 +109,23 @@ Every public feature has:
 
 ## Release Readiness
 
-Before publishing to npm:
+Before publishing either package:
 
 - [ ] Confirm the `widevin` package name is available on npm, or scope it.
 - [x] The npm `files` field only includes publishable artifacts
-      (`dist`, `README.md`, `NOTICE`).
-- [x] Build, typecheck, and test commands pass locally (`pnpm run build`,
-      `pnpm run typecheck`, `pnpm test`). No lint command is configured yet.
+      (`dist`, `README.md`, `NOTICE`, `LICENSE`).
+- [x] TypeScript typecheck, tests, build, and npm packing pass locally.
+- [x] Rust format, Clippy, tests, docs, and crate packaging pass locally;
+      CI repeats them on Rust 1.85 and runs the tests on Windows.
 - [x] The README contains install and usage instructions.
 - [x] The package exports are ESM-only and match the stated `node >=20`
       engine floor.
-- [ ] Add a `license` field to `package.json` and a `LICENSE` file.
-- [ ] Decide semantic versioning / release process before the first
-      publish (currently `0.1.4`, unpublished).
+- [x] MIT license metadata and license files are present.
+- [x] One shared version/tag policy is enforced by release automation.
+- [ ] Publish Rust `0.1.4` manually, then configure crates.io trusted
+      publishing for subsequent tags.
 
 ## Open Questions
 
 - Whether to support CommonJS consumers — not planned; revisit only if a
   real consumer requires it (Non-Goals).
-- License choice and release automation (versioning, changelog, publish
-  workflow) — not yet decided.
